@@ -1,0 +1,23 @@
+# FILE: requirements.txt
+
+# This MUST be at the top. It tells pip to look for wheels in the CPU repository first.
+# Prevents downloading massive CUDA (GPU) libraries, saving ~3GB of space.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+
+fastapi>=0.109.0
+uvicorn>=0.27.0
+sqlalchemy>=2.0.25
+psycopg2-binary>=2.9.9
+pydantic>=2.6.0
+pydantic[email]>=2.6.0
+pydantic-settings>=2.1.0
+requests>=2.31.0
+python-dotenv>=1.0.1
+llm-guard>=0.3.15
+psutil>=5.9.8
+google-auth>=2.27.0
+requests>=2.31.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.9

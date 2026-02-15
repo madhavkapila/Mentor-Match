@@ -1,0 +1,44 @@
+# FILE: .gitignore
+
+# --- Security (NEVER COMMIT THESE) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- IDEs ---
+.vscode/
+.idea/
+
+# --- OS Junk ---
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+
+# --- Migrations ---
+migrations/
+
+# --- ChatVat Engine (ignore the entire folder since it's a separate service) ---
+chatvat_engine/
+
+# --- Misc ---
+*.bak
+*.tmp
+
+# --- Personal Notes ---
+Archive/*
+/Notes.md
