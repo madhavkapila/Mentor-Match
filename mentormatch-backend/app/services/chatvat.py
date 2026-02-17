@@ -9,64 +9,56 @@ from app.models.chat import ChatMessage
 from app.core.monitor import monitor
 
 class ChatVatService:
+    # ── Token budget for conversation history ──
+    # Rough estimate: 1 token ≈ 4 characters.  We hard-cap the
+    # combined history string at ~500 tokens to preserve conversational
+    # context while protecting the Groq free-tier quota.  Only the 3
+    # most-recent messages are fetched; if they still exceed the budget
+    # we truncate from the oldest end.
+    MAX_HISTORY_MESSAGES = 3
+    MAX_HISTORY_CHARS = 2000        # ≈ 500 tokens
+
+    @staticmethod
+    def _trim_history(history_text: str, max_chars: int) -> str:
+        """Trim history from the *start* (oldest messages) to fit budget."""
+        if len(history_text) <= max_chars:
+            return history_text
+        # Keep the newest portion that fits
+        trimmed = history_text[-max_chars:]
+        # Avoid cutting mid-line — find the first newline
+        nl = trimmed.find("\n")
+        if nl != -1:
+            trimmed = trimmed[nl + 1:]
+        return f"[...earlier context trimmed...]\n{trimmed}"
+
     def ask(self, user_message: str, session_id: str, db: Session) -> str:
         """
         Orchestrates the 'Context Injection' while respecting the 'message' schema.
         """
-        # 1. Fetch History (Last 6 Messages)
+        # 1. Fetch History (Last 3 Messages, token-trimmed)
         history_text = ""
         if session_id:
             previous_msgs = db.query(ChatMessage).filter(
                 ChatMessage.session_id == session_id
-            ).order_by(ChatMessage.created_at.desc()).limit(6).all()
+            ).order_by(ChatMessage.created_at.desc()).limit(self.MAX_HISTORY_MESSAGES).all()
             
             for msg in reversed(previous_msgs):
                 role_label = "User" if msg.role == "user" else "Assistant"
                 history_text += f"{role_label}: {msg.content}\n"
 
-        # 2. Construct the Payload Content
-        # We inject memory into the 'message' string itself.
-        final_payload_content = f"""
-        ### SYSTEM INSTRUCTIONS
-        You are the "Capstone Compass," an intelligent Academic Matchmaker at Thapar Institute (TIET).
-        
-        ### 🧠 MODE SELECTION (CRITICAL)
-        1. **CHAT MODE:** If the user input is a greeting (e.g., "Hello"), a question about you, or general small talk -> Reply warmly and professionally as an academic assistant. Ask them to share their project idea. **DO NOT** use the strict format below for greetings.
-        2. **MATCH MODE:** If the user describes a project, research area, or technical topic -> YOU MUST use the **STRICT OUTPUT FORMAT** below.
-        
-        ### 🔍 MATCH MODE GUIDELINES
-        1. **DECONSTRUCT:** Extract technical keywords (e.g., "1.58 bit LLM" -> NLP, Model Compression, Quantization, Deep Learning).
-        2. **MATCH:** Search [Context] for faculty with matching "Research Interests" or "Publications".
-        3. **INFER:** If "Specialization" is not explicitly listed, **INFER IT** from their paper titles (e.g., A paper on "Image Retrieval" implies "Computer Vision").
-        4. **RANK:** Select the Top 5 **DISTINCT** mentors. Do not list the same person twice.
-        
-        ### 📝 STRICT OUTPUT FORMAT (For Match Mode ONLY)
-        **🔍 Project Analysis:**
-        [1 sentence analysis of the technical domains]
-        
-        **🏆 Recommended Mentors:**
-        
-        **1. Dr. [Name]** ([Department])
-           - **🧠 Specialization:** [Inferred or Listed Fields]
-           - **✨ Why them?:** [Explicit link between their specific paper/research and the student's idea]
-           - **📄 Key Evidence:** [Cite the exact paper title or project]
-           - **📧 Contact:** [Email OR "Check Faculty Profile"]
-        
-        (Repeat for Top 5)
-        
-        **💡 Pro Tip:**
-        [One specific, actionable tip on how to approach these professors based on their work]
-        
-        ### ⚠️ CONSTRAINTS
-        - **Context Only:** Stick strictly to the provided database.
-        - **No Repetition:** Do not summarize at the end. Just list the 5 mentors.
+            # Enforce token budget
+            history_text = self._trim_history(history_text, self.MAX_HISTORY_CHARS)
 
-        ### CONTEXT FROM DATABASE:
-        {history_text}
-        
-        ### USER INPUT:
-        {user_message}
-        """
+        # 2. Construct the Payload Content
+        # Only include history block when there's actual prior context.
+        if history_text.strip():
+            final_payload_content = (
+                f"### CONVERSATION HISTORY:\n{history_text}\n"
+                f"### CURRENT QUESTION:\n{user_message}"
+            )
+        else:
+            # First message — send only the user query, no wrapper noise
+            final_payload_content = user_message
 
         # 3. Send to ChatVat with RETRY LOGIC
         url = f"{settings.CHATVAT_ENGINE_URL}/chat"

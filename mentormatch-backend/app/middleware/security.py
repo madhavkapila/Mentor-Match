@@ -13,8 +13,14 @@ SQLI_PATTERNS = [
 
 MAX_BODY_SIZE = 10_000
 
+# Admin routes are exempt from SQLi scanning (the SQL Console MUST send SQL keywords)
+# Chat & Feedback are also exempt — LLM-Guard handles prompt security for those.
+# The regex patterns block common English words ("select", "create", "update") in natural chat.
+SQLI_EXEMPT_PREFIXES = ("/api/v1/admin", "/api/v1/chat", "/api/v1/feedback")
+
 async def sanitize_input_middleware(request: Request, call_next):
-    if request.method in ["POST", "PUT"]:
+    path = request.url.path
+    if request.method in ["POST", "PUT"] and not any(path.startswith(p) for p in SQLI_EXEMPT_PREFIXES):
         body = await request.body()
 
         if len(body) > MAX_BODY_SIZE:

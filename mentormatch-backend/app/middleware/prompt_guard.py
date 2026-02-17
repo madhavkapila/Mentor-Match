@@ -7,7 +7,7 @@ from app.core.monitor import monitor
 # Initialize Scanners ONCE (These load ML models, might take time on startup)
 print("Initializing Security Models... (This may take a few seconds)")
 injection_scanner = PromptInjection(threshold=0.5) 
-topic_scanner = BanTopics(topics=["politics", "crypto", "nsfw", "gambling"], threshold=0.5)
+topic_scanner = BanTopics(topics=["politics", "crypto", "nsfw", "gambling"], threshold=0.75)
 
 def scan_prompt(user_text: str):
     """

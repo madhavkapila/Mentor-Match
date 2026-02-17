@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.schemas.chat import ChatRequest, MessageResponse, FeedbackCreate
+from app.schemas.chat import ChatRequest, ChatResponse, FeedbackCreate
 from app.models.chat import ChatSession, ChatMessage, Feedback
 from app.services.chatvat import chatvat_service
 from app.middleware.prompt_guard import scan_prompt
@@ -11,10 +11,15 @@ from app.core.security import verify_turnstile
 
 router = APIRouter()
 
-@router.post("/chat", response_model=MessageResponse)
+@router.post("/chat", response_model=ChatResponse)
 def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
-    # 0. VERIFY HUMAN (Layer 2 Defense)
-    verify_turnstile(request.turnstile_token)
+    # 0. VERIFY HUMAN — session-gated (first message only)
+    # Turnstile tokens are single-use. Verify on new sessions only;
+    # subsequent messages reuse the already-verified session.
+    if not request.session_id:
+        if not request.turnstile_token:
+            raise HTTPException(status_code=400, detail="Turnstile token required for new sessions")
+        verify_turnstile(request.turnstile_token)
     
     # 1. SECURITY: Scan the prompt
     safe_text = scan_prompt(request.message)
@@ -32,25 +37,30 @@ def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
             raise HTTPException(status_code=404, detail="Session not found")
         session_id = request.session_id
 
-    # 3. SAVE USER MESSAGE
-    user_msg = ChatMessage(session_id=session_id, role="user", content=safe_text)
-    db.add(user_msg)
-    db.commit()
-
-    # 4. GET AI RESPONSE
-    # The service now correctly sends {"message": ...}
+    # 3. GET AI RESPONSE (before saving user msg, so history query
+    #    only sees truly *previous* messages — no duplication)
     ai_text = chatvat_service.ask(safe_text, session_id, db)
 
-    # 5. SAVE AI RESPONSE
+    # 4. SAVE BOTH MESSAGES (user + assistant) together
+    user_msg = ChatMessage(session_id=session_id, role="user", content=safe_text)
     ai_msg = ChatMessage(session_id=session_id, role="assistant", content=ai_text)
+    db.add(user_msg)
     db.add(ai_msg)
     db.commit()
     db.refresh(ai_msg)
 
-    return ai_msg
+    # Passthrough: return ChatVat's plain text message + session tracking
+    return ChatResponse(
+        session_id=session_id,
+        message=ai_text
+    )
 
 @router.post("/feedback")
 def submit_feedback(feedback: FeedbackCreate, db: Session = Depends(get_db)):
+    # Verify Turnstile if token was provided
+    if feedback.turnstile_token:
+        verify_turnstile(feedback.turnstile_token)
+
     new_feedback = Feedback(
         session_id=feedback.session_id,
         user_name=feedback.user_name,

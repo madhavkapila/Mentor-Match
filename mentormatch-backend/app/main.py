@@ -7,6 +7,7 @@ import time
 # Core Imports
 from app.core.database import engine, Base
 from app.core.config import settings
+from fastapi.middleware.cors import CORSMiddleware
 
 # Middleware Imports
 from app.core.monitor import monitor
@@ -18,8 +19,23 @@ from app.api.endpoints import chat, admin
 # This looks at all models imported above and creates them in Postgres if missing.
 Base.metadata.create_all(bind=engine)
 
+# 1b. Hydrate security monitor from persisted DB data (survives restarts)
+monitor.hydrate_from_db()
+
 # 2. Initialize App
 app = FastAPI(title=settings.PROJECT_NAME)
+
+
+# Allow Frontend to talk to Backend (configurable via CORS_ORIGINS env var)
+origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"], # Allow POST, GET, OPTIONS
+    allow_headers=["*"], # Allow Content-Type, Authorization
+)
 
 # 3. GLOBAL EXCEPTION HANDLER (The "Circuit Breaker")
 # If anything crashes (DB offline, ChatVat timeout), this catches it.

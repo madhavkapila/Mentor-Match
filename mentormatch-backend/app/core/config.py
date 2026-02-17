@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     def DATABASE_URL(self) -> str:
         return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.POSTGRES_DB}"
 
+    # --- CORS ---
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+
     # Cloudflare Turnstile
     TURNSTILE_SITE_KEY: str = ""
     TURNSTILE_SECRET_KEY: str = "1x0000000000000000000000000000000AA"

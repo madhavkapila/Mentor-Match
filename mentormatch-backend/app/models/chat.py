@@ -74,3 +74,14 @@ class AdminUser(Base):
     
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SecurityEvent(Base):
+    """Persisted security events — survives container restarts."""
+    __tablename__ = "security_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_type = Column(String, nullable=False, index=True)  # RATE_LIMIT, SQLI, PROMPT_INJECTION, BANNED_TOPIC
+    detail = Column(Text, nullable=True)
+    client_ip = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

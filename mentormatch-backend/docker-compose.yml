@@ -1,7 +1,5 @@
 # FILE: docker-compose.yml
 
-version: '3.8'
-
 services:
   # 1. The Database (Port 5432)
   db:

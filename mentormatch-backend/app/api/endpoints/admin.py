@@ -1,21 +1,77 @@
 # FILE: app/api/endpoints/admin.py
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 import psutil
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 from pydantic import BaseModel, EmailStr
+from typing import Optional
 
 from app.core.database import get_db
 from app.core.monitor import monitor
-from app.models.chat import ChatSession, Feedback, AdminUser
-from app.schemas.admin import SuperAdminDashboard, DBQueryResponse, DBQueryRequest
+from app.models.chat import ChatSession, Feedback, AdminUser, SecurityEvent
+from app.schemas.admin import (
+    SuperAdminDashboard, DBQueryResponse, DBQueryRequest,
+    LoginRequest, LoginResponse, FeedbackItem, FeedbackListResponse
+)
 # Import the hierarchy checks
-from app.core.security import require_viewer, require_editor, require_admin, require_super_admin
+from app.core.security import (
+    require_viewer, require_editor, require_admin, require_super_admin,
+    verify_google_token, create_access_token
+)
+from app.core.config import settings
 
 router = APIRouter()
+
+# ==========================================
+# LEVEL 0: PUBLIC (Login)
+# ==========================================
+@router.post("/auth/login", response_model=LoginResponse)
+def admin_login(request: LoginRequest, db: Session = Depends(get_db)):
+    """Verify Google OAuth token, issue JWT for admin users."""
+    # 1. Verify Google token
+    google_info = verify_google_token(request.google_token)
+    email = google_info.get("email", "").lower()
+    name = google_info.get("name", "")
+    picture = google_info.get("picture", "")
+
+    # 2. Check if super admin
+    if email == settings.SUPER_ADMIN_EMAIL:
+        access_token = create_access_token(
+            data={"sub": email},
+            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        )
+        return LoginResponse(
+            access_token=access_token,
+            user={"email": email, "name": name, "picture": picture, "role": "super_admin"}
+        )
+
+    # 3. Look up admin user in DB
+    user = db.query(AdminUser).filter(AdminUser.email == email).first()
+    if not user:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized. Your email is not registered as an admin."
+        )
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is deactivated.")
+
+    # 4. Update profile info from Google (keep it fresh)
+    user.name = name
+    user.picture = picture
+    db.commit()
+
+    # 5. Issue JWT
+    access_token = create_access_token(
+        data={"sub": email},
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    return LoginResponse(
+        access_token=access_token,
+        user={"email": email, "name": user.name, "picture": user.picture, "role": user.role}
+    )
 
 # --- INPUT SCHEMAS ---
 class AdminCreate(BaseModel):
@@ -44,20 +100,44 @@ def get_dashboard(
     avg_rating = db.query(func.avg(Feedback.rating)).scalar() or 0.0
     unresolved = db.query(Feedback).filter(Feedback.is_resolved == False).count()
 
+    # Security counters from persisted DB table (survives restarts)
+    sec_counts = dict(
+        db.query(SecurityEvent.event_type, func.count())
+        .group_by(SecurityEvent.event_type)
+        .all()
+    )
+    rl = sec_counts.get("RATE_LIMIT", 0)
+    pi = sec_counts.get("PROMPT_INJECTION", 0)
+    sq = sec_counts.get("SQLI", 0)
+    bt = sec_counts.get("BANNED_TOPIC", 0)
+
+    # Recent security logs — prefer DB (persisted) over in-memory
+    recent_logs_rows = (
+        db.query(SecurityEvent)
+        .order_by(SecurityEvent.created_at.desc())
+        .limit(5)
+        .all()
+    )
+    recent_logs = [
+        f"[{r.created_at.strftime('%H:%M:%S') if r.created_at else '??'}] [{r.event_type}] {r.detail or ''}"
+        for r in recent_logs_rows
+    ]
+
     return {
         "timestamp": datetime.now(),
         "traffic": {
             "total_requests": monitor.total_requests,
             "active_sessions_24h": active_24h,
+            "requests_per_minute_peak": 0,
             "average_latency_ms": monitor.get_avg_latency(),
             "total_tokens_processed": monitor.total_requests * 100
         },
         "security": {
-            "total_blocks": monitor.rate_limit_hits + monitor.prompt_injection_hits + monitor.sqli_hits,
-            "rate_limit_hits": monitor.rate_limit_hits,
-            "prompt_injection_attempts": monitor.prompt_injection_hits,
-            "sqli_attempts": monitor.sqli_hits,
-            "banned_topic_hits": monitor.banned_topic_hits,
+            "total_blocks": rl + pi + sq,
+            "rate_limit_hits": rl,
+            "prompt_injection_attempts": pi,
+            "sqli_attempts": sq,
+            "banned_topic_hits": bt,
             "blocked_ips_count": 0
         },
         "system": {
@@ -74,12 +154,50 @@ def get_dashboard(
             "net_promoter_score": 0.0,
             "unresolved_feedback": unresolved
         },
-        "recent_security_logs": monitor.security_logs[:5]
+        "recent_security_logs": recent_logs if recent_logs else monitor.security_logs[:5]
     }
 
 # ==========================================
-# LEVEL 2: EDITOR (Resolve Feedback)
+# LEVEL 2: EDITOR (List & Resolve Feedback)
 # ==========================================
+@router.get("/feedback", response_model=FeedbackListResponse)
+def list_feedback(
+    page: int = 1,
+    page_size: int = 20,
+    resolved: Optional[bool] = None,
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_editor)
+):
+    """List feedback items with optional filtering and pagination."""
+    query = db.query(Feedback)
+    if resolved is not None:
+        query = query.filter(Feedback.is_resolved == resolved)
+    total = query.count()
+    items = (
+        query.order_by(Feedback.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return FeedbackListResponse(
+        items=[
+            FeedbackItem(
+                id=f.id,
+                user_name=f.user_name,
+                user_email=f.user_email,
+                user_phone=f.user_phone,
+                message=f.message,
+                rating=f.rating,
+                session_id=str(f.session_id) if f.session_id else None,
+                is_resolved=f.is_resolved,
+                created_at=f.created_at
+            ) for f in items
+        ],
+        total=total,
+        page=page,
+        page_size=page_size
+    )
+
 @router.post("/feedback/resolve")
 def resolve_feedback(
     request: FeedbackResolve, 
@@ -115,6 +233,46 @@ def add_new_user(
     db.add(db_user)
     db.commit()
     return {"status": "success", "message": f"Added {new_user.email} as {new_user.role}"}
+
+@router.get("/users/list")
+def list_users(
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_admin)  # Admin+
+):
+    """List all admin users."""
+    users = db.query(AdminUser).order_by(AdminUser.created_at.desc()).all()
+    return {
+        "users": [
+            {
+                "id": u.id,
+                "email": u.email,
+                "name": u.name or "",
+                "role": u.role,
+                "is_active": u.is_active,
+                "picture": u.picture or "",
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+            }
+            for u in users
+        ]
+    }
+
+@router.post("/users/{user_id}/revoke")
+def revoke_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_admin)  # Admin+
+):
+    """Deactivate an admin user (set is_active=False)."""
+    target = db.query(AdminUser).filter(AdminUser.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.email == settings.SUPER_ADMIN_EMAIL:
+        raise HTTPException(status_code=403, detail="Cannot revoke Super Admin")
+    if target.id == getattr(user, "id", None):
+        raise HTTPException(status_code=400, detail="Cannot revoke yourself")
+    target.is_active = False
+    db.commit()
+    return {"status": "success", "message": f"Revoked access for {target.email}"}
 
 # ==========================================
 # LEVEL 4: SUPER ADMIN (Run SQL)

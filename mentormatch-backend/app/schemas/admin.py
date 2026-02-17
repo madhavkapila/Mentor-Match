@@ -47,6 +47,36 @@ class SuperAdminDashboard(BaseModel):
     business: BusinessStats
     recent_security_logs: List[str] # "IP 1.2.3.4 blocked for SQLi"
 
+# --- AUTH SCHEMAS ---
+class LoginRequest(BaseModel):
+    google_token: str
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: Dict[str, Any]  # {email, name, picture, role}
+
+# --- FEEDBACK LIST ---
+class FeedbackItem(BaseModel):
+    id: int
+    user_name: str
+    user_email: str
+    user_phone: Optional[str] = None
+    message: str
+    rating: Optional[int] = None
+    session_id: Optional[str] = None
+    is_resolved: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class FeedbackListResponse(BaseModel):
+    items: List[FeedbackItem]
+    total: int
+    page: int
+    page_size: int
+
 # --- DB MANAGER SCHEMAS ---
 class DBQueryRequest(BaseModel):
     query: str # Raw SQL (Read-Only enforced)

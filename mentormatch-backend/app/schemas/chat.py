@@ -8,7 +8,7 @@ from datetime import datetime
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=5000)
     session_id: Optional[UUID4] = None # If None, we create a new session
-    turnstile_token: str
+    turnstile_token: Optional[str] = None  # Only required on first message (session-gated)
 
 # 2. Output: A single message
 class MessageResponse(BaseModel):
@@ -18,6 +18,12 @@ class MessageResponse(BaseModel):
 
     class Config:
         from_attributes = True # Tells Pydantic to read SQLAlchemy models
+
+# 2b. Output: Chat response with session tracking (Passthrough wrapper)
+# 'message' stays a plain string — matches ChatVat's native { "message": "..." } format
+class ChatResponse(BaseModel):
+    session_id: UUID4
+    message: str
 
 # 3. Output: The full history
 class SessionResponse(BaseModel):
@@ -40,3 +46,6 @@ class FeedbackCreate(BaseModel):
     # The Feedback
     message: str = Field(..., min_length=5, max_length=2000)
     rating: Optional[int] = Field(None, ge=1, le=5) # 1 to 5 stars
+
+    # Turnstile token (sent by frontend, verified in endpoint)
+    turnstile_token: Optional[str] = None
