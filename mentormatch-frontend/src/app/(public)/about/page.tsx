@@ -16,6 +16,12 @@ import {
   BarChart3,
   Layers,
   Zap,
+  Linkedin,
+  Github,
+  Code2,
+  Trophy,
+  BookOpen,
+  Award,
 } from "lucide-react";
 
 const fadeUp = {
@@ -432,6 +438,120 @@ export default function AboutPage() {
                 </Card>
               </motion.div>
             ))}
+          </motion.div>
+        </section>
+
+        {/* Developer */}
+        <section>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-80px" }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-14"
+          >
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
+              About the Developer
+            </h2>
+            <p className="text-muted-foreground text-lg mt-3 max-w-xl mx-auto">
+              The person behind MentorMatch
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-60px" }}
+            variants={stagger}
+            className="max-w-4xl mx-auto"
+          >
+            <motion.div variants={cardReveal}>
+              <Card className="bg-gradient-to-br from-primary/5 via-card/80 to-cyan-500/5 border-primary/20 hover:border-primary/40 transition-all duration-300">
+                <CardContent className="pt-8 pb-8 px-6 sm:px-10">
+                  <div className="flex flex-col sm:flex-row items-center sm:items-start gap-8">
+                    {/* Avatar */}
+                    <motion.div
+                      whileHover={{ scale: 1.05, rotate: 2 }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                      className="flex-shrink-0 w-28 h-28 rounded-2xl bg-gradient-to-br from-primary/20 to-cyan-500/20 flex items-center justify-center border border-primary/20 shadow-[0_0_30px_rgba(6,182,212,0.15)]"
+                    >
+                      <GraduationCap className="w-14 h-14 text-primary" />
+                    </motion.div>
+
+                    {/* Info */}
+                    <div className="flex-1 text-center sm:text-left space-y-4">
+                      <div>
+                        <h3 className="text-2xl font-bold">Madhav Kapila</h3>
+                        <p className="text-muted-foreground mt-1">
+                          B.E. Computer Engineering — Thapar Institute of Engineering &amp; Technology
+                        </p>
+                        <p className="text-sm text-muted-foreground/70 mt-0.5">
+                          CGPA: 9.15 / 10
+                        </p>
+                      </div>
+
+                      {/* Highlights */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                        {[
+                          {
+                            icon: Award,
+                            text: "Amazon ML Summer School — Top 5% of 80,000+ applicants",
+                            color: "text-amber-400",
+                          },
+                          {
+                            icon: BookOpen,
+                            text: "DSA Mentor — Creative Computing Society, TIET",
+                            color: "text-emerald-400",
+                          },
+                          {
+                            icon: Code2,
+                            text: "ChatVat — Published PyPI package for RAG chatbots",
+                            color: "text-cyan-400",
+                          },
+                          {
+                            icon: Trophy,
+                            text: "400+ competitive programming problems solved",
+                            color: "text-blue-400",
+                          },
+                        ].map((item) => (
+                          <div
+                            key={item.text}
+                            className="flex items-start gap-3 text-sm text-muted-foreground"
+                          >
+                            <item.icon
+                              className={`w-4 h-4 mt-0.5 flex-shrink-0 ${item.color}`}
+                            />
+                            <span>{item.text}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Social Links */}
+                      <div className="flex items-center gap-3 pt-3 justify-center sm:justify-start">
+                        <a
+                          href="https://www.linkedin.com/in/madhav-kapila"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0A66C2]/10 border border-[#0A66C2]/20 text-[#0A66C2] hover:bg-[#0A66C2]/20 hover:border-[#0A66C2]/30 text-sm font-medium transition-all"
+                        >
+                          <Linkedin className="w-4 h-4" />
+                          LinkedIn
+                        </a>
+                        <a
+                          href="https://github.com/madhavkapila"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/50 border border-border/50 text-foreground hover:bg-muted hover:border-border text-sm font-medium transition-all"
+                        >
+                          <Github className="w-4 h-4" />
+                          GitHub
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
           </motion.div>
         </section>
 
