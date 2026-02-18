@@ -18,6 +18,9 @@ import {
   Clock,
   Zap,
   MessageSquare,
+  HardDrive,
+  Network,
+  Gauge,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -88,6 +91,13 @@ export default function DashboardOverviewPage() {
     if (d > 0) return `${d}d ${h}h`;
     if (h > 0) return `${h}h ${m}m`;
     return `${m}m`;
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
+    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${bytes} B`;
   };
 
   return (
@@ -207,7 +217,12 @@ export default function DashboardOverviewPage() {
           </CardHeader>
           <CardContent className="space-y-5">
             <ProgressBar label="CPU" value={data.system.cpu_usage_percent} />
-            <ProgressBar label="RAM" value={data.system.ram_usage_percent} />
+            <ProgressBar label={`RAM (${data.system.ram_used_gb}/${data.system.ram_total_gb} GB)`} value={data.system.ram_usage_percent} />
+            <ProgressBar
+              label={`Disk (${data.system.storage.used_gb}/${data.system.storage.total_gb} GB)`}
+              value={data.system.storage.used_percent}
+              icon={<HardDrive className="w-3.5 h-3.5 text-muted-foreground" />}
+            />
             <div className="flex items-center justify-between text-[15px]">
               <span className="text-muted-foreground">Database</span>
               <StatusBadge ok={data.system.db_connection_status} />
@@ -220,6 +235,26 @@ export default function DashboardOverviewPage() {
               <span className="text-muted-foreground">Uptime</span>
               <span className="text-foreground font-mono text-sm">
                 {formatUptime(data.system.uptime_seconds)}
+              </span>
+            </div>
+
+            {/* Load Average */}
+            <div className="flex items-center justify-between text-[15px]">
+              <span className="text-muted-foreground flex items-center gap-1.5">
+                <Gauge className="w-3.5 h-3.5" /> Load Avg
+              </span>
+              <span className="text-foreground font-mono text-sm">
+                {data.system.load_average.map((v) => v.toFixed(2)).join(" / ")}
+              </span>
+            </div>
+
+            {/* Network I/O */}
+            <div className="flex items-center justify-between text-[15px]">
+              <span className="text-muted-foreground flex items-center gap-1.5">
+                <Network className="w-3.5 h-3.5" /> Network
+              </span>
+              <span className="text-foreground font-mono text-sm">
+                ↑{formatBytes(data.system.network_bytes_sent)} ↓{formatBytes(data.system.network_bytes_recv)}
               </span>
             </div>
           </CardContent>
@@ -245,6 +280,72 @@ export default function DashboardOverviewPage() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Top Processes */}
+      {data.system.top_processes.length > 0 && (
+        <motion.section variants={fadeUp}>
+          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">
+            Top Processes (EC2 Host)
+          </h2>
+          <Card className="bg-card/50 border-border/60 hover:border-primary/20 transition-all">
+            <CardContent className="pt-5">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-muted-foreground text-xs uppercase tracking-wider border-b border-border/40">
+                      <th className="text-left pb-3 pl-2">PID</th>
+                      <th className="text-left pb-3">Process</th>
+                      <th className="text-right pb-3">CPU %</th>
+                      <th className="text-right pb-3 pr-2">MEM %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.system.top_processes.map((proc) => (
+                      <tr
+                        key={proc.pid}
+                        className="border-b border-border/30 last:border-0 hover:bg-muted/30 transition-colors"
+                      >
+                        <td className="py-2.5 pl-2 font-mono text-muted-foreground">
+                          {proc.pid}
+                        </td>
+                        <td className="py-2.5 font-medium truncate max-w-[200px]">
+                          {proc.name}
+                        </td>
+                        <td className="py-2.5 text-right font-mono">
+                          <span
+                            className={cn(
+                              proc.cpu_percent > 50
+                                ? "text-red-400"
+                                : proc.cpu_percent > 20
+                                  ? "text-amber-400"
+                                  : "text-foreground"
+                            )}
+                          >
+                            {proc.cpu_percent.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-right font-mono pr-2">
+                          <span
+                            className={cn(
+                              proc.memory_percent > 50
+                                ? "text-red-400"
+                                : proc.memory_percent > 20
+                                  ? "text-amber-400"
+                                  : "text-foreground"
+                            )}
+                          >
+                            {proc.memory_percent.toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.section>
+      )}
 
       {/* Recent Security Logs */}
       {data.recent_security_logs.length > 0 && (
@@ -311,7 +412,7 @@ function StatCard({
   );
 }
 
-function ProgressBar({ label, value }: { label: string; value: number }) {
+function ProgressBar({ label, value, icon }: { label: string; value: number; icon?: React.ReactNode }) {
   const color =
     value > 90
       ? "bg-red-500"
@@ -327,7 +428,10 @@ function ProgressBar({ label, value }: { label: string; value: number }) {
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-center text-[15px]">
-        <span className="text-muted-foreground">{label}</span>
+        <span className="text-muted-foreground flex items-center gap-1.5">
+          {icon}
+          {label}
+        </span>
         <span className="text-foreground font-mono text-sm">{value.toFixed(1)}%</span>
       </div>
       <div className="h-2 bg-muted rounded-full overflow-hidden">

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 import psutil
+import os
 from datetime import datetime, timedelta
 import time
 from pydantic import BaseModel, EmailStr
@@ -91,8 +92,43 @@ def get_dashboard(
     user: AdminUser = Depends(require_viewer) # Anyone Viewer+
 ):
     # (Same Dashboard Logic as before...)
-    cpu = psutil.cpu_percent()
-    ram = psutil.virtual_memory().percent
+    cpu = psutil.cpu_percent(interval=1)
+    mem = psutil.virtual_memory()
+    ram = mem.percent
+    ram_total_gb = round(mem.total / (1024 ** 3), 2)
+    ram_used_gb = round(mem.used / (1024 ** 3), 2)
+
+    # Storage
+    disk = psutil.disk_usage('/')
+    storage = {
+        "total_gb": round(disk.total / (1024 ** 3), 2),
+        "used_gb": round(disk.used / (1024 ** 3), 2),
+        "free_gb": round(disk.free / (1024 ** 3), 2),
+        "used_percent": disk.percent,
+    }
+
+    # Load average (1, 5, 15 min)
+    load_avg = [round(x, 2) for x in os.getloadavg()]
+
+    # Top 5 processes by CPU
+    top_procs = []
+    for proc in sorted(
+        psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']),
+        key=lambda p: p.info.get('cpu_percent') or 0,
+        reverse=True,
+    )[:5]:
+        top_procs.append({
+            "pid": proc.info['pid'],
+            "name": proc.info['name'] or "unknown",
+            "cpu_percent": round(proc.info.get('cpu_percent') or 0, 1),
+            "memory_percent": round(proc.info.get('memory_percent') or 0, 1),
+        })
+
+    # Network I/O
+    net = psutil.net_io_counters()
+    net_sent = net.bytes_sent
+    net_recv = net.bytes_recv
+
     active_24h = db.query(ChatSession).filter(
         ChatSession.created_at >= func.now() - text("INTERVAL '1 DAY'")
     ).count()
@@ -143,10 +179,17 @@ def get_dashboard(
         "system": {
             "cpu_usage_percent": cpu,
             "ram_usage_percent": ram,
+            "ram_total_gb": ram_total_gb,
+            "ram_used_gb": ram_used_gb,
             "db_connection_status": True,
             "chatvat_engine_status": True,
             "uptime_seconds": monitor.get_uptime(),
-            "error_rate_5xx": 0.0
+            "error_rate_5xx": 0.0,
+            "storage": storage,
+            "load_average": load_avg,
+            "top_processes": top_procs,
+            "network_bytes_sent": net_sent,
+            "network_bytes_recv": net_recv,
         },
         "business": {
             "total_feedback": total_fb,

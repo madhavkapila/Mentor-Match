@@ -35,13 +35,34 @@ export interface SecurityStats {
   blocked_ips_count: number;
 }
 
+export interface StorageInfo {
+  total_gb: number;
+  used_gb: number;
+  free_gb: number;
+  used_percent: number;
+}
+
+export interface ProcessInfo {
+  pid: number;
+  name: string;
+  cpu_percent: number;
+  memory_percent: number;
+}
+
 export interface SystemHealth {
   cpu_usage_percent: number;
   ram_usage_percent: number;
+  ram_total_gb: number;
+  ram_used_gb: number;
   db_connection_status: boolean;
   chatvat_engine_status: boolean;
   error_rate_5xx: number;
   uptime_seconds: number;
+  storage: StorageInfo;
+  load_average: number[];        // [1min, 5min, 15min]
+  top_processes: ProcessInfo[];   // Top 5 by CPU
+  network_bytes_sent: number;
+  network_bytes_recv: number;
 }
 
 export interface BusinessStats {

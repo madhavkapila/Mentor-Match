@@ -89,6 +89,7 @@ export default function AnalyticsPage() {
   const systemData = [
     { name: "CPU", value: data.system.cpu_usage_percent },
     { name: "RAM", value: data.system.ram_usage_percent },
+    { name: "Disk", value: data.system.storage.used_percent },
   ];
 
   const businessData = [
