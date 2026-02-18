@@ -475,7 +475,12 @@ export default function AboutPage() {
                       transition={{ type: "spring", stiffness: 300 }}
                       className="flex-shrink-0 w-28 h-28 rounded-2xl bg-gradient-to-br from-primary/20 to-cyan-500/20 flex items-center justify-center border border-primary/20 shadow-[0_0_30px_rgba(6,182,212,0.15)]"
                     >
-                      <GraduationCap className="w-14 h-14 text-primary" />
+                      <img
+                        src="https://github.com/madhavkapila.png"
+                        alt="Madhav Kapila GitHub profile"
+                        className="w-full h-full object-cover rounded-2xl"
+                        loading="lazy"
+                      />
                     </motion.div>
 
                     {/* Info */}
