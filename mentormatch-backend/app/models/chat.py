@@ -85,3 +85,33 @@ class SecurityEvent(Base):
     detail = Column(Text, nullable=True)
     client_ip = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class TrafficMetric(Base):
+    """Persisted traffic counters — survives container restarts.
+
+    A single row (id=1) acts as a running accumulator.
+    On each flush the in-memory deltas are added to the DB row so that
+    after a restart the totals can be reloaded.
+    """
+    __tablename__ = "traffic_metrics"
+
+    id = Column(Integer, primary_key=True, default=1)
+    total_requests = Column(Integer, default=0, nullable=False)
+    total_latency_ms = Column(Integer, default=0, nullable=False)   # stored as integer ms
+    first_started_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class PageVisit(Base):
+    """Tracks real human visits to the website (one row per visit)."""
+    __tablename__ = "page_visits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_ip = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+    path = Column(String, default="/", nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    total_latency_ms = Column(Integer, default=0, nullable=False)   # stored as integer ms
+    first_started_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

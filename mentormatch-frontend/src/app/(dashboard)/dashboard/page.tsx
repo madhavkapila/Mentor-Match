@@ -23,6 +23,7 @@ import {
   Gauge,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TrafficChart } from "@/components/admin/traffic-chart";
 
 const stagger = {
   hidden: {},
@@ -135,35 +136,52 @@ export default function DashboardOverviewPage() {
           Traffic
         </h2>
         <motion.div
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5"
           variants={stagger}
         >
           <StatCard
             icon={Activity}
-            label="Total Requests"
+            label="Chat Queries"
             value={data.traffic.total_requests.toLocaleString()}
             index={0}
           />
           <StatCard
             icon={Zap}
-            label="Active Sessions (24h)"
-            value={data.traffic.active_sessions_24h.toLocaleString()}
+            label="Total Sessions"
+            value={data.traffic.total_sessions.toLocaleString()}
             index={1}
+          />
+          <StatCard
+            icon={Activity}
+            label="Unique Visitors"
+            value={data.traffic.unique_visitors.toLocaleString()}
+            index={2}
           />
           <StatCard
             icon={Clock}
             label="Avg Latency"
             value={`${Math.round(data.traffic.average_latency_ms)}ms`}
             accent={data.traffic.average_latency_ms > 2000 ? "warn" : "default"}
-            index={2}
+            index={3}
           />
           <StatCard
             icon={Activity}
             label="Tokens Processed"
             value={data.traffic.total_tokens_processed.toLocaleString()}
-            index={3}
+            index={4}
+          />
+          <StatCard
+            icon={Activity}
+            label="Gateway Requests"
+            value={data.traffic.total_gateway_requests.toLocaleString()}
+            index={5}
           />
         </motion.div>
+      </motion.section>
+
+      {/* Traffic Line Chart */}
+      <motion.section variants={fadeUp}>
+        <TrafficChart />
       </motion.section>
 
       {/* Security Row */}

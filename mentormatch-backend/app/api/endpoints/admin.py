@@ -12,7 +12,7 @@ from typing import Optional
 
 from app.core.database import get_db
 from app.core.monitor import monitor
-from app.models.chat import ChatSession, Feedback, AdminUser, SecurityEvent
+from app.models.chat import ChatSession, ChatMessage, Feedback, AdminUser, SecurityEvent, PageVisit
 from app.schemas.admin import (
     SuperAdminDashboard, DBQueryResponse, DBQueryRequest,
     LoginRequest, LoginResponse, FeedbackItem, FeedbackListResponse
@@ -129,9 +129,16 @@ def get_dashboard(
     net_sent = net.bytes_sent
     net_recv = net.bytes_recv
 
-    active_24h = db.query(ChatSession).filter(
-        ChatSession.created_at >= func.now() - text("INTERVAL '1 DAY'")
-    ).count()
+    # All-time sessions (every chat session ever created)
+    total_sessions = db.query(ChatSession).count()
+
+    # Chat queries = user messages sent to ChatVat (port 8000) — persisted in DB
+    total_chat_queries = db.query(ChatMessage).filter(ChatMessage.role == "user").count()
+
+    # Real human website visits (persisted in page_visits table)
+    unique_visitors = db.query(func.count(func.distinct(PageVisit.client_ip))).scalar() or 0
+    total_visits = db.query(PageVisit).count()
+
     total_fb = db.query(Feedback).count()
     avg_rating = db.query(func.avg(Feedback.rating)).scalar() or 0.0
     unresolved = db.query(Feedback).filter(Feedback.is_resolved == False).count()
@@ -162,11 +169,14 @@ def get_dashboard(
     return {
         "timestamp": datetime.now(),
         "traffic": {
-            "total_requests": monitor.total_requests,
-            "active_sessions_24h": active_24h,
+            "total_requests": total_chat_queries,
+            "total_gateway_requests": monitor.total_requests,
+            "total_sessions": total_sessions,
+            "unique_visitors": unique_visitors,
+            "total_visits": total_visits,
             "requests_per_minute_peak": 0,
             "average_latency_ms": monitor.get_avg_latency(),
-            "total_tokens_processed": monitor.total_requests * 100
+            "total_tokens_processed": total_chat_queries * 100
         },
         "security": {
             "total_blocks": rl + pi + sq,
@@ -199,6 +209,64 @@ def get_dashboard(
         },
         "recent_security_logs": recent_logs if recent_logs else monitor.security_logs[:5]
     }
+
+
+@router.get("/traffic-history")
+def get_traffic_history(
+    hours: int = 24,
+    db: Session = Depends(get_db),
+    user: AdminUser = Depends(require_viewer),
+):
+    """Return hourly chat query + visit counts for the line graph.
+
+    Returns the last `hours` hours (default 24), one data point per hour.
+    Each point: { "hour": "2026-02-20T14:00:00", "chat_queries": 5, "visits": 12 }
+    """
+    from sqlalchemy import extract
+
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+
+    # Chat queries per hour (user messages)
+    chat_rows = (
+        db.query(
+            func.date_trunc('hour', ChatMessage.created_at).label("hour"),
+            func.count().label("cnt"),
+        )
+        .filter(ChatMessage.role == "user", ChatMessage.created_at >= cutoff)
+        .group_by("hour")
+        .order_by("hour")
+        .all()
+    )
+
+    # Page visits per hour
+    visit_rows = (
+        db.query(
+            func.date_trunc('hour', PageVisit.created_at).label("hour"),
+            func.count().label("cnt"),
+        )
+        .filter(PageVisit.created_at >= cutoff)
+        .group_by("hour")
+        .order_by("hour")
+        .all()
+    )
+
+    # Build a full hour-by-hour series (fill gaps with 0)
+    chat_map = {r[0].isoformat(): r[1] for r in chat_rows}
+    visit_map = {r[0].isoformat(): r[1] for r in visit_rows}
+
+    series = []
+    now = datetime.utcnow()
+    for i in range(hours, -1, -1):
+        h = (now - timedelta(hours=i)).replace(minute=0, second=0, microsecond=0)
+        key = h.isoformat()
+        series.append({
+            "hour": key,
+            "chat_queries": chat_map.get(key, 0),
+            "visits": visit_map.get(key, 0),
+        })
+
+    return {"hours": hours, "series": series}
+
 
 # ==========================================
 # LEVEL 2: EDITOR (List & Resolve Feedback)

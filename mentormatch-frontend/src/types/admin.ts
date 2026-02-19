@@ -20,10 +20,24 @@ export interface LoginResponse {
 // --- Dashboard Stats ---
 export interface TrafficStats {
   total_requests: number;
-  active_sessions_24h: number;
+  total_gateway_requests: number;
+  total_sessions: number;
+  unique_visitors: number;
+  total_visits: number;
   requests_per_minute_peak: number;
   average_latency_ms: number;
   total_tokens_processed: number;
+}
+
+export interface TrafficHistoryPoint {
+  hour: string;
+  chat_queries: number;
+  visits: number;
+}
+
+export interface TrafficHistoryResponse {
+  hours: number;
+  series: TrafficHistoryPoint[];
 }
 
 export interface SecurityStats {

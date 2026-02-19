@@ -1,10 +1,10 @@
 # FILE: app/api/endpoints/chat.py
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.schemas.chat import ChatRequest, ChatResponse, FeedbackCreate
-from app.models.chat import ChatSession, ChatMessage, Feedback
+from app.models.chat import ChatSession, ChatMessage, Feedback, PageVisit
 from app.services.chatvat import chatvat_service
 from app.middleware.prompt_guard import scan_prompt
 from app.core.security import verify_turnstile
@@ -73,3 +73,14 @@ def submit_feedback(feedback: FeedbackCreate, db: Session = Depends(get_db)):
     db.add(new_feedback)
     db.commit()
     return {"status": "success", "message": "Feedback received"}
+
+
+@router.post("/visit")
+def record_visit(request: Request, db: Session = Depends(get_db)):
+    """Record a real human page visit (called once per browser session by the frontend)."""
+    client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
+    user_agent = request.headers.get("user-agent", "")
+    visit = PageVisit(client_ip=client_ip, user_agent=user_agent, path="/")
+    db.add(visit)
+    db.commit()
+    return {"status": "ok"}

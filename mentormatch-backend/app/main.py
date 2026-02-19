@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 import time
 
 # Core Imports
@@ -15,6 +16,9 @@ from app.middleware.rate_limiter import rate_limit_middleware
 from app.middleware.security import sanitize_input_middleware
 from app.api.endpoints import chat, admin
 
+# Ensure ALL models are imported so create_all picks them up (including TrafficMetric)
+import app.models.chat  # noqa: F401
+
 # 1. Initialize Database Tables
 # This looks at all models imported above and creates them in Postgres if missing.
 Base.metadata.create_all(bind=engine)
@@ -22,8 +26,18 @@ Base.metadata.create_all(bind=engine)
 # 1b. Hydrate security monitor from persisted DB data (survives restarts)
 monitor.hydrate_from_db()
 
+
+# Lifespan — flush traffic metrics on shutdown so nothing is lost
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    # Shutdown: persist any remaining in-memory traffic deltas
+    print("[SHUTDOWN] Flushing traffic metrics to DB …")
+    monitor.flush_now()
+
+
 # 2. Initialize App
-app = FastAPI(title=settings.PROJECT_NAME)
+app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
 
 
 # Allow Frontend to talk to Backend (configurable via CORS_ORIGINS env var)

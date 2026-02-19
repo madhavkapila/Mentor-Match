@@ -9,6 +9,7 @@ import { ChatErrorBoundary } from "@/components/chat/chat-error-boundary";
 import { SuggestedPrompts } from "@/components/chat/suggested-prompts";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TurnstileWidget } from "@/components/shared/turnstile-widget";
+import { apiPost } from "@/lib/axios";
 
 export default function ChatPage() {
   const {
@@ -29,6 +30,16 @@ export default function ChatPage() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Record a real human visit (once per browser session)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const key = "mm_visit_recorded";
+    if (!sessionStorage.getItem(key)) {
+      sessionStorage.setItem(key, "1");
+      apiPost<Record<string, never>, unknown>("/api/v1/visit", {}).catch(() => {});
+    }
+  }, []);
 
   const handleSuggestedPrompt = useCallback(
     (text: string) => {
