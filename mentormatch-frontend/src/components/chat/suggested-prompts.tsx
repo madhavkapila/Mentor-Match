@@ -90,7 +90,7 @@ export function SuggestedPrompts({ onSelect }: SuggestedPromptsProps) {
           transition={{ delay: 0.35, duration: 0.5 }}
           className="text-lg sm:text-xl text-muted-foreground max-w-md mx-auto leading-relaxed"
         >
-          AI-powered academic mentor finder for Thapar Institute. Find the perfect faculty for your capstone.
+          AI-powered academic mentor finder for Thapar Institute. Find the perfect faculty for your Research or Project.
         </motion.p>
 
         {/* Floating badge */}
