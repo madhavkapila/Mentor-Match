@@ -22,7 +22,6 @@ export interface TrafficStats {
   total_requests: number;
   total_gateway_requests: number;
   total_sessions: number;
-  unique_visitors: number;
   total_visits: number;
   requests_per_minute_peak: number;
   average_latency_ms: number;
@@ -31,8 +30,7 @@ export interface TrafficStats {
 
 export interface TrafficHistoryPoint {
   hour: string;
-  chat_queries: number;
-  visits: number;
+  visitors: number;
 }
 
 export interface TrafficHistoryResponse {

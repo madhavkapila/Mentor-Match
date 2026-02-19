@@ -136,7 +136,6 @@ def get_dashboard(
     total_chat_queries = db.query(ChatMessage).filter(ChatMessage.role == "user").count()
 
     # Real human website visits (persisted in page_visits table)
-    unique_visitors = db.query(func.count(func.distinct(PageVisit.client_ip))).scalar() or 0
     total_visits = db.query(PageVisit).count()
 
     total_fb = db.query(Feedback).count()
@@ -172,7 +171,6 @@ def get_dashboard(
             "total_requests": total_chat_queries,
             "total_gateway_requests": monitor.total_requests,
             "total_sessions": total_sessions,
-            "unique_visitors": unique_visitors,
             "total_visits": total_visits,
             "requests_per_minute_peak": 0,
             "average_latency_ms": monitor.get_avg_latency(),
@@ -217,42 +215,31 @@ def get_traffic_history(
     db: Session = Depends(get_db),
     user: AdminUser = Depends(require_viewer),
 ):
-    """Return hourly chat query + visit counts for the line graph.
+    """Return hourly website visitor counts for the line graph.
 
     Returns the last `hours` hours (default 24), one data point per hour.
-    Each point: { "hour": "2026-02-20T14:00:00", "chat_queries": 5, "visits": 12 }
+    Each point: { "hour": "2026-02-20T14:00:00", "visitors": 12 }
+    Visitors = new chat sessions created that hour (each = a real person
+    who passed Turnstile verification and started chatting).
     """
-    from sqlalchemy import extract
 
     cutoff = datetime.utcnow() - timedelta(hours=hours)
 
-    # Chat queries per hour (user messages)
-    chat_rows = (
+    # Visitors per hour = new chat sessions created (best proxy for website visitors,
+    # since every session requires Turnstile verification = real human)
+    visitor_rows = (
         db.query(
-            func.date_trunc('hour', ChatMessage.created_at).label("hour"),
+            func.date_trunc('hour', ChatSession.created_at).label("hour"),
             func.count().label("cnt"),
         )
-        .filter(ChatMessage.role == "user", ChatMessage.created_at >= cutoff)
-        .group_by("hour")
-        .order_by("hour")
-        .all()
-    )
-
-    # Page visits per hour
-    visit_rows = (
-        db.query(
-            func.date_trunc('hour', PageVisit.created_at).label("hour"),
-            func.count().label("cnt"),
-        )
-        .filter(PageVisit.created_at >= cutoff)
+        .filter(ChatSession.created_at >= cutoff)
         .group_by("hour")
         .order_by("hour")
         .all()
     )
 
     # Build a full hour-by-hour series (fill gaps with 0)
-    chat_map = {r[0].isoformat(): r[1] for r in chat_rows}
-    visit_map = {r[0].isoformat(): r[1] for r in visit_rows}
+    visitor_map = {r[0].isoformat(): r[1] for r in visitor_rows}
 
     series = []
     now = datetime.utcnow()
@@ -261,8 +248,7 @@ def get_traffic_history(
         key = h.isoformat()
         series.append({
             "hour": key,
-            "chat_queries": chat_map.get(key, 0),
-            "visits": visit_map.get(key, 0),
+            "visitors": visitor_map.get(key, 0),
         })
 
     return {"hours": hours, "series": series}

@@ -153,8 +153,8 @@ export default function DashboardOverviewPage() {
           />
           <StatCard
             icon={Activity}
-            label="Unique Visitors"
-            value={data.traffic.unique_visitors.toLocaleString()}
+            label="Website Visits"
+            value={data.traffic.total_visits.toLocaleString()}
             index={2}
           />
           <StatCard

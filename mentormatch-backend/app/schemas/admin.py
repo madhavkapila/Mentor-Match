@@ -10,7 +10,6 @@ class TrafficStats(BaseModel):
     total_requests: int
     total_gateway_requests: int
     total_sessions: int
-    unique_visitors: int
     total_visits: int
     requests_per_minute_peak: int
     average_latency_ms: float

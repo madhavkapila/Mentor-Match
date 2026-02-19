@@ -112,6 +112,3 @@ class PageVisit(Base):
     user_agent = Column(String, nullable=True)
     path = Column(String, default="/", nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
-    total_latency_ms = Column(Integer, default=0, nullable=False)   # stored as integer ms
-    first_started_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

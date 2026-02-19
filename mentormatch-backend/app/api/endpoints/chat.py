@@ -12,7 +12,7 @@ from app.core.security import verify_turnstile
 router = APIRouter()
 
 @router.post("/chat", response_model=ChatResponse)
-def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
+def chat_endpoint(request: ChatRequest, raw_request: Request, db: Session = Depends(get_db)):
     # 0. VERIFY HUMAN — session-gated (first message only)
     # Turnstile tokens are single-use. Verify on new sessions only;
     # subsequent messages reuse the already-verified session.
@@ -26,7 +26,11 @@ def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
 
     # 2. SESSION MANAGEMENT
     if not request.session_id:
-        new_session = ChatSession(client_ip="0.0.0.0") 
+        # Extract real client IP from reverse proxy header
+        client_ip = raw_request.headers.get("x-forwarded-for", raw_request.client.host if raw_request.client else "unknown")
+        if "," in client_ip:
+            client_ip = client_ip.split(",")[0].strip()
+        new_session = ChatSession(client_ip=client_ip) 
         db.add(new_session)
         db.commit()
         db.refresh(new_session)
