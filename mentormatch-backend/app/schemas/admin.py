@@ -8,7 +8,10 @@ from pydantic import EmailStr
 # --- PILLAR 1: TRAFFIC & USAGE ---
 class TrafficStats(BaseModel):
     total_requests: int
-    active_sessions_24h: int
+    total_gateway_requests: int
+    total_sessions: int
+    unique_visitors: int
+    total_visits: int
     requests_per_minute_peak: int
     average_latency_ms: float
     total_tokens_processed: int # Estimate
