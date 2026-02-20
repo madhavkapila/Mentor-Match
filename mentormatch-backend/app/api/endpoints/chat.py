@@ -18,7 +18,7 @@ def chat_endpoint(request: ChatRequest, raw_request: Request, db: Session = Depe
     # subsequent messages reuse the already-verified session.
     if not request.session_id:
         if not request.turnstile_token:
-            raise HTTPException(status_code=400, detail="Turnstile token required for new sessions")
+            raise HTTPException(status_code=400, detail="Verifying if you are a human. Pease send request after few seconds.")
         verify_turnstile(request.turnstile_token)
     
     # 1. SECURITY: Scan the prompt
